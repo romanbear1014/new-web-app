@@ -1,1 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background-color: #f4fdf4; padding: 20px; color: #333; }
+    h1 { color: #2e7d32; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+    select, input[type="file"], button { width: 100%; margin: 10px 0; padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+    button { background-color: #4caf50; color: white; border: none; font-size: 16px; cursor: pointer; font-weight: bold; }
+    button:disabled { background-color: #ccc; }
+    #preview { max-width: 100%; border-radius: 8px; display: none; margin-top: 10px; }
+    .status-box { margin-top: 20px; padding: 15px; border-radius: 8px; display: none; }
+    .success { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+    .fail { background-color: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+    #loader { display: none; margin-top: 15px; color: #2e7d32; font-weight: bold; }
+    .points { font-size: 24px; color: #f57c00; font-weight: bold; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
 
+  <div class="card">
+    <h1>🌱 에코 미션</h1>
+    <div class="points">나의 포인트: <span id="pointDisplay">0</span> P</div>
+
+    <label for="missionSelect"><b>오늘의 미션을 선택하세요</b></label>
+    <select id="missionSelect">
+      <option value="다회용 텀블러에 음료 담아 마시기">텀블러 사용하기</option>
+      <option value="다회용 용기에 음식 포장하기">다회용기 포장 (용기내)</option>
+      <option value="자전거를 타고 이동하기">자전거 이용하기</option>
+      <option value="분리수거(플라스틱 라벨 제거 후 배출)하기">올바른 분리수거</option>
+    </select>
+
+    <label for="imageUpload" style="display:block; margin-top:15px; font-weight:bold;">인증 사진 업로드</label>
+    <!-- 스마트폰 접속 시 카메라 우선 실행 -->
+    <input type="file" id="imageUpload" accept="image/*" capture="camera" onchange="previewImage(event)">
+    <img id="preview" alt="미리보기 이미지" />
+
+    <button id="submitBtn" onclick="submitMission()">인증하기</button>
+    <div id="loader">Gemini가 사진을 분석 중입니다... 🤖</div>
+
+    <div id="resultBox" class="status-box">
+      <h3 id="resultTitle"></h3>
+      <p id="resultReason"></p>
+    </div>
+  </div>
+
+  <script>
+    // 페이지 로드 시 현재 포인트 불러오기
+    window.onload = function() {
+      google.script.run.withSuccessHandler(function(points) {
+        document.getElementById('pointDisplay').innerText = points;
+      }).getUserPoints();
+    };
+
+    let base64String = "";
+
+    function previewImage(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('preview').src = e.target.result;
+          document.getElementById('preview').style.display = 'block';
+          base64String = e.target.result; // Base64 데이터 저장
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function submitMission() {
+      if (!base64String) {
+        alert("사진을 먼저 업로드해주세요.");
+        return;
+      }
+
+      const missionName = document.getElementById('missionSelect').value;
+      const btn = document.getElementById('submitBtn');
+      const loader = document.getElementById('loader');
+      const resultBox = document.getElementById('resultBox');
+
+      // UI 초기화
+      btn.disabled = true;
+      loader.style.display = "block";
+      resultBox.style.display = "none";
+
+      // 서버 사이드 함수(verifyMission) 호출
+      google.script.run
+        .withSuccessHandler(function(response) {
+          loader.style.display = "none";
+          btn.disabled = false;
+          resultBox.style.display = "block";
+
+          if (response.status === "SUCCESS") {
+            resultBox.className = "status-box success";
+            document.getElementById('resultTitle').innerText = "🎉 미션 성공!";
+            document.getElementById('pointDisplay').innerText = response.points; // 포인트 업데이트
+          } else {
+            resultBox.className = "status-box fail";
+            document.getElementById('resultTitle').innerText = "❌ 미션 실패";
+          }
+          document.getElementById('resultReason').innerText = response.reason || response.message;
+        })
+        .withFailureHandler(function(error) {
+          loader.style.display = "none";
+          btn.disabled = false;
+          alert("오류가 발생했습니다: " + error.message);
+        })
+        .verifyMission(base64String, missionName);
+    }
+  </script>
+</body>
+</html>
